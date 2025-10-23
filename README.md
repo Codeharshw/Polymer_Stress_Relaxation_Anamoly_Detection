@@ -90,6 +90,14 @@ threshold_pct = 95         # Percentile threshold for anomalies
 iqr_k = 1.5               # IQR multiplier for outlier detection
 ```
 
+## Model Training
+The LSTM autoencoder is trained using:
+- Loss Function: Mean Squared Error (MSE)
+- Optimizer: Adam
+- Early Stopping: Patience of 8 epochs on validation loss
+- Data Split: 80% training, 20% validation
+- Regularization: Dropout (0.2) on LSTM layers
+
 ## Output
 
 The script generates:
@@ -111,14 +119,6 @@ The script generates:
 3. **Model Training:** LSTM autoencoder learns normal patterns
 4. **Anomaly Detection:** Flag sequences with high reconstruction error
 5. **Results:** Visualize and export detected anomalies
-
-## Model Training
-The LSTM autoencoder is trained using:
-- Loss Function: Mean Squared Error (MSE)
-- Optimizer: Adam
-- Early Stopping: Patience of 8 epochs on validation loss
-- Data Split: 80% training, 20% validation
-- Regularization: Dropout (0.2) on LSTM layers
 
 ## Example Results
 
