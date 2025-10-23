@@ -139,10 +139,6 @@ MIT License - see LICENSE file for details
 
 Contributions welcome! Please open an issue or submit a pull request.
 
-## Contact
-
-For questions or issues, please open a GitHub issue or contact [your email].
-
 ## Acknowledgments
 
 - Built with TensorFlow and Keras
