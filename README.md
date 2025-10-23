@@ -122,7 +122,7 @@ The script generates:
 
 ## Example Results
 
-![Anomaly Detection Example](docs/example_output.png)
+![Anomaly Detection Example](docs/example_LSTM_output.png)
 
 *Red points indicate detected anomalies in polymer stress behavior*
 
