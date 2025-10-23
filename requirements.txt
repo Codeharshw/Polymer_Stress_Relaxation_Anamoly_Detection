@@ -1,0 +1,10 @@
+# Requirements for Polymer Stress Anomaly Detection
+numpy>=1.19.0
+pandas>=1.2.0
+matplotlib>=3.3.0
+scikit-learn>=0.24.0
+tensorflow>=2.8.0
+
+# Optional: For Jupyter notebook support
+jupyter>=1.0.0
+ipykernel>=6.0.0
