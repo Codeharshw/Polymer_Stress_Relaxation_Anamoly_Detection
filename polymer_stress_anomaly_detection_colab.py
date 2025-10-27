@@ -28,6 +28,20 @@ from tensorflow.keras import layers
 from tensorflow.keras.callbacks import EarlyStopping
 from google.colab import files  # For file upload in Colab
 import io
+import random
+import os
+
+# -----------------------
+# REPRODUCIBILITY SEED
+# -----------------------
+# Set a seed for reproducibility
+SEED = 67
+os.environ['PYTHONHASHSEED'] = str(SEED)
+random.seed(SEED)
+np.random.seed(SEED)
+tf.random.set_seed(SEED)
+print(f"\n✓ Reproducibility seeds set (SEED={SEED}).")
+
 
 print("="*60)
 print("FILE UPLOAD & GPU SETUP")
@@ -69,14 +83,14 @@ else:
 # -----------------------
 # USER PARAMETERS
 # -----------------------
-TIME_COL = "Time (s)"                 # column name for time
-STRESS_COL = "Normal Stress (Pa)"     # column name for stress
+TIME_COL = "Time (s)"              # column name for time
+STRESS_COL = "Normal Stress (Pa)"      # column name for stress
 
 seq_len = 200
 stride = 20
 batch_size = 64
 epochs = 100
-threshold_pct = 98.5
+threshold_pct = 95
 iqr_k = 1.5
 use_full_sequence_labeling = True
 
@@ -148,18 +162,43 @@ print(f"Sequences built: {len(sequences)}")
 # -----------------------
 # STEP 4: SCALE & SPLIT
 # -----------------------
-scaler = StandardScaler()
-scaler.fit(stress_vals)
-sequences_scaled = scaler.transform(sequences.reshape(-1,1)).reshape(sequences.shape)
+print("\n" + "="*60)
+print("STEP 4: SCALE & SPLIT")
+print("="*60)
 
-split = int(0.8 * len(sequences_scaled))
-X_train, X_val = sequences_scaled[:split], sequences_scaled[split:]
+# Define features before splitting
+timesteps, n_features = seq_len, 1
+
+# Split sequences BEFORE scaling to prevent data leakage
+split = int(0.8 * len(sequences))
+train_seq = sequences[:split]
+val_seq = sequences[split:]
+
+print(f"Train sequences: {len(train_seq)}")
+print(f"Validation sequences: {len(val_seq)}")
+
+# 1. Initialize Scaler
+scaler = StandardScaler()
+
+# 2. Fit scaler ONLY on training data
+# We reshape to 2D (samples * timesteps, features) to fit the scaler
+scaler.fit(train_seq.reshape(-1, n_features))
+
+# 3. Transform train, validation, and full datasets
+X_train = scaler.transform(train_seq.reshape(-1, n_features)).reshape(train_seq.shape)
+X_val = scaler.transform(val_seq.reshape(-1, n_features)).reshape(val_seq.shape)
+X_all_scaled = scaler.transform(sequences.reshape(-1, n_features)).reshape(sequences.shape)
+
+print("✓ Data scaled correctly (fit on train data only).")
 
 
 # -----------------------
 # STEP 5: LSTM AUTOENCODER
 # -----------------------
-timesteps, n_features = seq_len, 1
+# Note: timesteps, n_features defined in STEP 4
+print("\n" + "="*60)
+print("STEP 5: BUILD & TRAIN LSTM AUTOENCODER")
+print("="*60)
 
 inp = keras.Input(shape=(timesteps, n_features))
 x = layers.LSTM(128, activation='tanh', return_sequences=True, dropout=0.2)(inp)
@@ -196,21 +235,40 @@ plt.show()
 # -----------------------
 # STEP 6: ANOMALY DETECTION
 # -----------------------
-X_all = sequences_scaled
-X_rec = model.predict(X_all, batch_size=batch_size, verbose=0)
-seq_mse = np.mean(np.square(X_all - X_rec), axis=(1,2))
+print("\n" + "="*60)
+print("STEP 6: ANOMALY DETECTION")
+print("="*60)
 
-threshold = np.percentile(seq_mse, threshold_pct)
-is_anom_seq = seq_mse > threshold
+# 1. Get reconstruction errors for the TRAINING set
+print("Calculating reconstruction error for training data...")
+X_train_rec = model.predict(X_train, batch_size=batch_size, verbose=1)
+train_mse = np.mean(np.square(X_train - X_train_rec), axis=(1,2))
 
+# 2. Calculate threshold based ONLY on training errors
+threshold = np.percentile(train_mse, threshold_pct)
+print(f"\nAnomaly Threshold ({threshold_pct}th percentile of train MSE): {threshold:.4e}")
+
+# 3. Get reconstruction errors for the ENTIRE dataset
+# Use the X_all_scaled created in STEP 4
+print("\nCalculating reconstruction error for all data...")
+X_all_rec = model.predict(X_all_scaled, batch_size=batch_size, verbose=1)
+all_mse = np.mean(np.square(X_all_scaled - X_all_rec), axis=(1,2))
+
+# 4. Find anomalies in the full dataset using the train-based threshold
+is_anom_seq = all_mse > threshold
+
+# --- Map sequence anomalies back to the original dataframe ---
 df['is_anomaly_lstm'] = False
 if use_full_sequence_labeling:
+    print("Mapping full sequences to original dataframe...")
     for i, s in enumerate(seq_starts):
         if is_anom_seq[i]:
+            # This logic correctly maps back to the original gappy index
             start_global = clean_idx[s]
             end_global = clean_idx[min(s+seq_len-1, len(clean_idx)-1)]
             df.loc[start_global:end_global, 'is_anomaly_lstm'] = True
 else:
+    print("Mapping sequence centers to original dataframe...")
     centers = [center_global_indices[i] for i in range(len(is_anom_seq)) if is_anom_seq[i]]
     df.loc[centers, 'is_anomaly_lstm'] = True
 
@@ -220,6 +278,10 @@ print(f"LSTM anomalies detected: {df['is_anomaly_lstm'].sum()}")
 # -----------------------
 # STEP 7: VISUALIZATION
 # -----------------------
+print("\n" + "="*60)
+print("STEP 7: VISUALIZATION")
+print("="*60)
+
 plt.figure(figsize=(14,4))
 plt.plot(df['time'], df['stress'], color='steelblue', lw=0.8, alpha=0.7)
 plt.scatter(df.loc[df['is_anomaly_lstm'],'time'], df.loc[df['is_anomaly_lstm'],'stress'],
@@ -234,6 +296,10 @@ plt.show()
 # -----------------------
 # STEP 8: SAVE RESULTS
 # -----------------------
+print("\n" + "="*60)
+print("STEP 8: SAVE RESULTS")
+print("="*60)
+
 output_file = "polymer_stress_anomaly_results.csv"
 df.to_csv(output_file, index=False)
 print(f"\n✓ Results saved to '{output_file}' — you can now download it below:")
